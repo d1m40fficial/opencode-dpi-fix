@@ -1,0 +1,62 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build exe
+        shell: pwsh
+        run: ./build.ps1
+
+      - name: Smoke test install / revert
+        shell: pwsh
+        run: |
+          $env:OPENCODE_DPI_FIX_ALLOW_NONADMIN = '1'
+          $env:OPENCODE_DPI_FIX_HOSTS = Join-Path $env:RUNNER_TEMP 'hosts'
+          Copy-Item "$env:SystemRoot\System32\drivers\etc\hosts" $env:OPENCODE_DPI_FIX_HOSTS -Force
+
+          $p = Start-Process -FilePath .\dist\OpencodeDpiFix.exe -ArgumentList 'install' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "install exited with $($p.ExitCode)" }
+
+          $content = Get-Content -Raw $env:OPENCODE_DPI_FIX_HOSTS
+          if ($content -notmatch '8\.47\.69\.5\s+opencode\.ai') { throw 'install did not write opencode.ai' }
+          if ($content -notmatch '8\.47\.69\.5\s+models\.dev') { throw 'install did not write models.dev' }
+          if ($content -notmatch '8\.47\.69\.5\s+registry\.npmjs\.org') { throw 'install did not write registry.npmjs.org' }
+
+          $p = Start-Process -FilePath .\dist\OpencodeDpiFix.exe -ArgumentList 'status' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "status exited with $($p.ExitCode)" }
+
+          $p = Start-Process -FilePath .\dist\OpencodeDpiFix.exe -ArgumentList 'revert' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "revert exited with $($p.ExitCode)" }
+
+          $content = Get-Content -Raw $env:OPENCODE_DPI_FIX_HOSTS
+          if ($content -match 'DPI bypass') { throw 'revert left the block behind' }
+
+          Write-Host 'smoke test passed'
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpencodeDpiFix
+          path: dist/OpencodeDpiFix.exe
+          if-no-files-found: error
+
+      - name: Attach exe to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/OpencodeDpiFix.exe
+          generate_release_notes: true
