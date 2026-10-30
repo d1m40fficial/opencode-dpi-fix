@@ -31,9 +31,30 @@ Some ISPs (Rostelecom in Russia, for one) started dropping connections to `openc
 the website is unreachable, the app cannot list models, npm cannot install packages.
 A VPN is overkill, a proxy is a hassle.
 
-This tool points three domains at a working Cloudflare edge address through the system
-`hosts` file. It affects **everything at once**: the browser, the opencode app, the CLI, npm.
-No background process, no service, no proxy settings.
+The tool fixes it in one click and affects **everything at once**: the browser, the opencode
+app, the CLI, npm. No background process, no service, no proxy settings.
+
+---
+
+## The gist
+
+The ISP does not filter by hostname and not by IP address: it drops the connection based on
+the contents of the TLS handshake. At the same time the same Cloudflare is reachable on
+several addresses, and the rule is not applied to all of them.
+
+| Scenario | Where the request goes | Result |
+|---|---|---|
+| No bypass | `172.65.90.x` — the default Cloudflare address | ✂ the DPI resets the connection |
+| With bypass | `8.47.69.5` — the same Cloudflare, another edge | ✓ HTTP 200 |
+
+The handshake is identical in both cases — only the address it goes to changes.
+
+The tool writes three lines into `hosts` so the browser, the app and npm go to an address
+where the rule does not fire.
+
+This is **not a proxy and not a VPN**: traffic goes straight to the same Cloudflare, only the
+entry address changes. The domains, the certificate, the SNI and the content stay the same,
+so nothing has to be reconfigured in any app and the connection stays just as fast.
 
 ---
 
@@ -70,8 +91,8 @@ A marked block is appended to `C:\Windows\System32\drivers\etc\hosts`:
 
 ## Why it works
 
-The DPI does not filter by hostname or by IP: it inspects the TLS ClientHello. If the client
-sends a post-quantum key share (`X25519MLKEM768`, ~1.5 KB), the connection is silently reset.
+A bit more on the blocking itself. The DPI inspects the TLS ClientHello: if the client offers
+a post-quantum key share (`X25519MLKEM768`, ~1.5 KB), the connection is silently reset.
 Plain `X25519` to the very same address goes through.
 
 `8.47.69.5` is the same Cloudflare edge, but the rule is not applied there — verified to serve
