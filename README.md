@@ -9,7 +9,7 @@
 
 [![Скачать](https://img.shields.io/badge/%D0%A1%D0%BA%D0%B0%D1%87%D0%B0%D1%82%D1%8C-OpencodeDpiFix.exe-3b82f6?style=flat-square)](https://github.com/d1m40fficial/opencode-dpi-fix/releases/latest)
 [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-161a22?style=flat-square&logo=windows&logoColor=white)](https://github.com/d1m40fficial/opencode-dpi-fix/releases/latest)
-[![Размер](https://img.shields.io/badge/%D1%80%D0%B0%D0%B7%D0%BC%D0%B5%D1%80-82%20%D0%9A%D0%91-161a22?style=flat-square)](https://github.com/d1m40fficial/opencode-dpi-fix/releases/latest)
+[![Размер](https://img.shields.io/badge/%D1%80%D0%B0%D0%B7%D0%BC%D0%B5%D1%80-93%20%D0%9A%D0%91-161a22?style=flat-square)](https://github.com/d1m40fficial/opencode-dpi-fix/releases/latest)
 [![Лицензия](https://img.shields.io/badge/%D0%BB%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F-MIT-161a22?style=flat-square)](LICENSE)
 
 [Русский](README.md) · [English](README.en.md)
@@ -118,7 +118,7 @@ OpencodeDpiFix.exe check --lang en       по-английски
 powershell -ExecutionPolicy Bypass -File build.ps1
 ```
 
-Результат — `dist\OpencodeDpiFix.exe` (WinForms, .NET Framework 4.8, ~82 КБ).
+Результат — `dist\OpencodeDpiFix.exe` (WinForms, .NET Framework 4.8, ~93 КБ).
 Иконка генерируется скриптом `tools/make-icon.ps1`. Автосборка и релизы — в
 [GitHub Actions](.github/workflows/build.yml).
 
