@@ -7,7 +7,7 @@ namespace OpencodeDpiFix
 {
     internal static class Program
     {
-        public const string Version = "1.0.0";
+        public const string Version = "1.1.0";
         public const string ProjectUrl = "https://github.com/opencode-dpi-fix/opencode-dpi-fix";
 
         private const uint AttachParentProcess = 0xFFFFFFFF;
@@ -24,6 +24,8 @@ namespace OpencodeDpiFix
         [STAThread]
         private static int Main(string[] args)
         {
+            Strings.Initialize();
+
             if (args.Length > 0)
             {
                 // Консольный режим: подключаемся к консоли родителя, чтобы вывод был виден.
@@ -44,9 +46,11 @@ namespace OpencodeDpiFix
             if (!HostsFix.IsAdmin() && !HostsFix.AdminCheckBypassed && !Elevate())
             {
                 MessageBox.Show(
-                    "Для правки файла hosts нужны права администратора.\r\n\r\n" +
-                    "Щёлкните по файлу правой кнопкой и выберите «Запуск от имени администратора».",
-                    "Обход блокировки opencode.ai",
+                    Strings.NoAdmin + "\r\n\r\n" +
+                    (Strings.English
+                        ? "Right-click the file and choose “Run as administrator”."
+                        : "Щёлкните по файлу правой кнопкой и выберите «Запуск от имени администратора»."),
+                    Strings.WindowTitle,
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);
                 return 1;

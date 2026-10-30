@@ -11,14 +11,23 @@ namespace OpencodeDpiFix
         private readonly Card _statusCard = new Card();
         private readonly Label _statusDot = new Label();
         private readonly Label _statusText = new Label();
-        private readonly FlatButton _install = new FlatButton();
+
+        private readonly Label _title = new Label();
+        private readonly Label _subtitle = new Label();
+        private readonly Label _langSwitch = new Label();
+        private readonly Label _logCaption = new Label();
+        private readonly Label _footer = new Label();
+        private readonly Label _edgeLabel = new Label();
+        private readonly Label _edgeHint = new Label();
+
+        private readonly FlatButton _primary = new FlatButton();
         private readonly FlatButton _check = new FlatButton();
-        private readonly FlatButton _revert = new FlatButton();
         private readonly CheckBoxDark _ipv6 = new CheckBoxDark();
         private readonly TextBox _edge = new TextBox();
         private readonly TextBox _log = new TextBox();
 
         private bool _busy;
+        private bool _bypassOn;
 
         [DllImport("dwmapi.dll")]
         private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
@@ -28,7 +37,6 @@ namespace OpencodeDpiFix
 
         public MainForm()
         {
-            Text = "Обход блокировки opencode.ai";
             Font = new Font("Segoe UI", 9F);
             ClientSize = new Size(620, 578);
             StartPosition = FormStartPosition.CenterScreen;
@@ -43,12 +51,13 @@ namespace OpencodeDpiFix
             catch { }
 
             BuildUi();
-            RefreshState();
+            RefreshState(false);
+            ApplyLanguage();
 
-            Log("Файл hosts: " + HostsFix.HostsPath);
+            Log(Strings.LogHosts(HostsFix.HostsPath));
             if (!HostsFix.IsAdmin() && !HostsFix.AdminCheckBypassed)
-                Log("Внимание: нет прав администратора — правка hosts не сработает.");
-            Log("После включения закройте и заново откройте браузер и opencode.");
+                Log(Strings.WarnNoAdmin);
+            Log(Strings.RestartHint);
         }
 
         protected override void OnHandleCreated(EventArgs e)
@@ -64,7 +73,7 @@ namespace OpencodeDpiFix
             }
             catch
             {
-                // на старых системах просто останется светлый заголовок
+                // на старых системах останется светлый заголовок
             }
         }
 
@@ -72,21 +81,26 @@ namespace OpencodeDpiFix
 
         private void BuildUi()
         {
-            Label title = new Label();
-            title.Text = "Обход блокировки opencode.ai";
-            title.Font = new Font("Segoe UI", 15.5F, FontStyle.Bold);
-            title.ForeColor = Theme.Text;
-            title.AutoSize = false;
-            title.Bounds = new Rectangle(24, 20, 572, 32);
-            Controls.Add(title);
+            _title.Font = new Font("Segoe UI", 15.5F, FontStyle.Bold);
+            _title.ForeColor = Theme.Text;
+            _title.AutoSize = false;
+            _title.Bounds = new Rectangle(24, 20, 500, 32);
+            Controls.Add(_title);
 
-            Label subtitle = new Label();
-            subtitle.Text =
-                "Направляет opencode.ai, models.dev и registry.npmjs.org на рабочий edge-адрес " +
-                "Cloudflare через файл hosts. Прокси и VPN не нужны.";
-            subtitle.ForeColor = Theme.Muted;
-            subtitle.Bounds = new Rectangle(24, 56, 572, 36);
-            Controls.Add(subtitle);
+            _langSwitch.AutoSize = false;
+            _langSwitch.Bounds = new Rectangle(548, 26, 48, 22);
+            _langSwitch.TextAlign = ContentAlignment.MiddleRight;
+            _langSwitch.Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
+            _langSwitch.ForeColor = Theme.Faint;
+            _langSwitch.Cursor = Cursors.Hand;
+            _langSwitch.MouseEnter += delegate { _langSwitch.ForeColor = Theme.Text; };
+            _langSwitch.MouseLeave += delegate { _langSwitch.ForeColor = Theme.Faint; };
+            _langSwitch.Click += delegate { OnSwitchLanguage(); };
+            Controls.Add(_langSwitch);
+
+            _subtitle.ForeColor = Theme.Muted;
+            _subtitle.Bounds = new Rectangle(24, 56, 572, 36);
+            Controls.Add(_subtitle);
 
             _statusCard.Bounds = new Rectangle(24, 104, 572, 52);
             _statusCard.Radius = 10;
@@ -109,18 +123,18 @@ namespace OpencodeDpiFix
             _statusText.TextAlign = ContentAlignment.MiddleLeft;
             _statusCard.Controls.Add(_statusText);
 
-            StyleButton(_install, "Включить обход", 24, 172, 180, true);
-            _install.Click += delegate { OnInstall(); };
-            Controls.Add(_install);
+            _primary.Bounds = new Rectangle(24, 172, 280, 42);
+            _primary.Click += delegate { OnPrimary(); };
+            Controls.Add(_primary);
 
-            StyleButton(_check, "Проверить доступ", 220, 172, 180, false);
+            _check.Bounds = new Rectangle(312, 172, 284, 42);
+            _check.NormalBack = Theme.Surface;
+            _check.HoverBack = Theme.SurfaceHover;
+            _check.PressedBack = Theme.SurfacePressed;
+            _check.BorderColor = Theme.Border;
+            _check.ForeColor = Theme.Text;
             _check.Click += delegate { OnCheck(); };
             Controls.Add(_check);
-
-            StyleButton(_revert, "Удалить записи", 416, 172, 180, false);
-            _revert.ForeColor = Color.FromArgb(214, 206, 210);
-            _revert.Click += delegate { OnRevert(); };
-            Controls.Add(_revert);
 
             Card settings = new Card();
             settings.Bounds = new Rectangle(24, 230, 572, 96);
@@ -128,19 +142,16 @@ namespace OpencodeDpiFix
             settings.BorderColor = Theme.Border;
             Controls.Add(settings);
 
-            _ipv6.Text = "Отклонять IPv6 (если сайт открывается медленно)";
-            _ipv6.ForeColor = Theme.Text;
             _ipv6.BackColor = Theme.Surface;
-            _ipv6.Bounds = new Rectangle(16, 16, 460, 22);
+            _ipv6.ForeColor = Theme.Text;
+            _ipv6.Bounds = new Rectangle(16, 16, 470, 22);
             settings.Controls.Add(_ipv6);
 
-            Label edgeLabel = new Label();
-            edgeLabel.Text = "Edge-адрес";
-            edgeLabel.ForeColor = Theme.Muted;
-            edgeLabel.BackColor = Theme.Surface;
-            edgeLabel.Bounds = new Rectangle(16, 50, 78, 30);
-            edgeLabel.TextAlign = ContentAlignment.MiddleLeft;
-            settings.Controls.Add(edgeLabel);
+            _edgeLabel.ForeColor = Theme.Muted;
+            _edgeLabel.BackColor = Theme.Surface;
+            _edgeLabel.Bounds = new Rectangle(16, 50, 78, 30);
+            _edgeLabel.TextAlign = ContentAlignment.MiddleLeft;
+            settings.Controls.Add(_edgeLabel);
 
             Card edgeBox = new Card();
             edgeBox.Bounds = new Rectangle(100, 51, 130, 28);
@@ -157,20 +168,16 @@ namespace OpencodeDpiFix
             _edge.Bounds = new Rectangle(10, 6, 110, 18);
             edgeBox.Controls.Add(_edge);
 
-            Label edgeHint = new Label();
-            edgeHint.Text = "если не работает — попробуйте " + HostsFix.BackupEdgeIp;
-            edgeHint.ForeColor = Theme.Faint;
-            edgeHint.BackColor = Theme.Surface;
-            edgeHint.Bounds = new Rectangle(246, 50, 310, 30);
-            edgeHint.TextAlign = ContentAlignment.MiddleLeft;
-            settings.Controls.Add(edgeHint);
+            _edgeHint.ForeColor = Theme.Faint;
+            _edgeHint.BackColor = Theme.Surface;
+            _edgeHint.Bounds = new Rectangle(246, 50, 310, 30);
+            _edgeHint.TextAlign = ContentAlignment.MiddleLeft;
+            settings.Controls.Add(_edgeHint);
 
-            Label logCaption = new Label();
-            logCaption.Text = "Журнал";
-            logCaption.Font = new Font("Segoe UI", 8.25F, FontStyle.Bold);
-            logCaption.ForeColor = Theme.Faint;
-            logCaption.Bounds = new Rectangle(24, 338, 200, 18);
-            Controls.Add(logCaption);
+            _logCaption.Font = new Font("Segoe UI", 8.25F, FontStyle.Bold);
+            _logCaption.ForeColor = Theme.Faint;
+            _logCaption.Bounds = new Rectangle(24, 338, 200, 18);
+            Controls.Add(_logCaption);
 
             Card logCard = new Card();
             logCard.Bounds = new Rectangle(24, 358, 572, 168);
@@ -197,77 +204,111 @@ namespace OpencodeDpiFix
             };
             logCard.Controls.Add(_log);
 
-            Label footer = new Label();
-            footer.Text = "Обратимо: «Удалить записи» убирает только свой блок, резервные копии hosts.bak-* лежат рядом с hosts";
-            footer.Font = new Font("Segoe UI", 8F);
-            footer.ForeColor = Theme.Faint;
-            footer.Bounds = new Rectangle(24, 540, 572, 18);
-            Controls.Add(footer);
+            _footer.Font = new Font("Segoe UI", 8F);
+            _footer.ForeColor = Theme.Faint;
+            _footer.Bounds = new Rectangle(24, 540, 572, 18);
+            Controls.Add(_footer);
 
-            AcceptButton = _install;
+            AcceptButton = _primary;
         }
 
-        private static void StyleButton(FlatButton button, string text, int x, int y, int width, bool primary)
+        /// <summary>Применяет текущий язык ко всем подписям окна.</summary>
+        private void ApplyLanguage()
         {
-            button.Text = text;
-            button.Bounds = new Rectangle(x, y, width, 42);
-            button.Font = new Font("Segoe UI", 9.5F, primary ? FontStyle.Bold : FontStyle.Regular);
+            Text = Strings.WindowTitle;
+            _title.Text = Strings.WindowTitle;
+            _subtitle.Text = Strings.Subtitle;
+            _check.Text = Strings.ButtonCheck;
+            _ipv6.Text = Strings.Ipv6Caption;
+            _edgeLabel.Text = Strings.EdgeCaption;
+            _edgeHint.Text = Strings.EdgeHint(HostsFix.BackupEdgeIp);
+            _logCaption.Text = Strings.LogCaption;
+            _footer.Text = Strings.Footer;
+            _langSwitch.Text = Strings.OtherLanguageCode.ToUpperInvariant();
 
-            if (primary)
+            _ipv6.Invalidate();
+            UpdatePrimary();
+            RefreshState(false);
+        }
+
+        private void OnSwitchLanguage()
+        {
+            if (_busy) return;
+
+            Strings.SetLanguage(Strings.OtherLanguageCode);
+            Strings.Save();
+            ApplyLanguage();
+        }
+
+        /// <summary>Внешний вид главной кнопки: включить (акцент) или выключить (осторожно).</summary>
+        private void UpdatePrimary()
+        {
+            _primary.Text = _bypassOn ? Strings.ButtonDisable : Strings.ButtonEnable;
+
+            if (_bypassOn)
             {
-                button.NormalBack = Theme.Accent;
-                button.HoverBack = Theme.AccentHover;
-                button.PressedBack = Theme.AccentPressed;
-                button.BorderColor = Color.Transparent;
-                button.ForeColor = Color.White;
+                _primary.NormalBack = Theme.Surface;
+                _primary.HoverBack = Color.FromArgb(46, 30, 34);
+                _primary.PressedBack = Color.FromArgb(38, 25, 29);
+                _primary.BorderColor = Color.FromArgb(82, 44, 50);
+                _primary.ForeColor = Color.FromArgb(248, 113, 113);
+                _primary.Font = new Font("Segoe UI", 9.5F, FontStyle.Regular);
             }
             else
             {
-                button.NormalBack = Theme.Surface;
-                button.HoverBack = Theme.SurfaceHover;
-                button.PressedBack = Theme.SurfacePressed;
-                button.BorderColor = Theme.Border;
-                button.ForeColor = Theme.Text;
+                _primary.NormalBack = Theme.Accent;
+                _primary.HoverBack = Theme.AccentHover;
+                _primary.PressedBack = Theme.AccentPressed;
+                _primary.BorderColor = Color.Transparent;
+                _primary.ForeColor = Color.White;
+                _primary.Font = new Font("Segoe UI", 9.5F, FontStyle.Bold);
             }
+
+            _primary.Invalidate();
         }
 
         // -------------------------------------------------------------- actions
+
+        private void OnPrimary()
+        {
+            if (_bypassOn) OnDisable();
+            else OnInstall();
+        }
 
         private void OnInstall()
         {
             string ip = _edge.Text.Trim();
             bool blockIpv6 = _ipv6.Checked;
 
-            RunAsync("Включаю обход…", delegate(Action<string> log)
+            RunAsync(Strings.BusyInstall, delegate(Action<string> log)
             {
                 HostsFix.Install(ip, blockIpv6, log);
                 log(string.Empty);
-                log("Готово. Закройте и заново откройте браузер и приложение opencode.");
+                log(Strings.DoneMessage);
+            });
+        }
+
+        private void OnDisable()
+        {
+            RunAsync(Strings.BusyDisable, delegate(Action<string> log)
+            {
+                HostsFix.Revert(log);
             });
         }
 
         private void OnCheck()
         {
             string fallback = _edge.Text.Trim();
-            RunAsync("Проверяю доступ…", delegate(Action<string> log)
+            RunAsync(Strings.BusyCheck, delegate(Action<string> log)
             {
                 HostsState state = HostsFix.GetState();
                 string expected = state.Applied && state.EdgeIp != null ? state.EdgeIp : fallback;
 
-                if (!state.Applied)
-                    log("Внимание: записи этого инструмента в hosts не найдены — проверяю как есть.");
+                if (!state.Applied) log(Strings.CheckNotApplied);
 
-                log("Ожидаемый edge-адрес: " + expected);
+                log(Strings.CheckExpected(expected));
                 log(string.Empty);
                 NetworkCheck.RunAll(expected, log);
-            });
-        }
-
-        private void OnRevert()
-        {
-            RunAsync("Удаляю записи…", delegate(Action<string> log)
-            {
-                HostsFix.Revert(log);
             });
         }
 
@@ -289,7 +330,7 @@ namespace OpencodeDpiFix
                 }
                 catch (Exception ex)
                 {
-                    Log("ОШИБКА: " + ex.Message);
+                    Log(Strings.ErrorPrefix(ex.Message));
                 }
                 finally
                 {
@@ -299,7 +340,7 @@ namespace OpencodeDpiFix
                         {
                             _busy = false;
                             SetButtonsEnabled(true);
-                            RefreshState();
+                            RefreshState(true);
                         }));
                     }
                     catch
@@ -314,28 +355,30 @@ namespace OpencodeDpiFix
 
         private void SetButtonsEnabled(bool enabled)
         {
-            _install.Enabled = enabled;
+            _primary.Enabled = enabled;
             _check.Enabled = enabled;
-            _revert.Enabled = enabled;
         }
 
-        private void RefreshState()
+        private void RefreshState(bool logWarnings)
         {
             HostsState state = HostsFix.GetState();
+            _bypassOn = state.Applied;
 
             if (state.Applied)
             {
-                string text = "Обход включён — домены идут на " + (state.EdgeIp ?? "неизвестный адрес");
-                if (state.Ipv6Blocked) text += ", IPv6 отклоняется";
+                string text = Strings.StatusOn(state.EdgeIp ?? "?");
+                if (state.Ipv6Blocked) text += Strings.Ipv6Suffix;
                 SetStatus(text, true);
             }
             else
             {
-                SetStatus("Обход выключен — записей в hosts нет", false);
+                SetStatus(Strings.StatusOff, false);
             }
 
-            if (state.OtherEntries)
-                Log("Внимание: в hosts есть посторонние записи для этих доменов — они могут мешать.");
+            UpdatePrimary();
+
+            if (logWarnings && state.OtherEntries)
+                Log(Strings.WarnOtherEntries);
         }
 
         private void SetStatus(string text, bool? applied)

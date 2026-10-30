@@ -1,5 +1,4 @@
 using System;
-using System.Globalization;
 
 namespace OpencodeDpiFix
 {
@@ -18,8 +17,19 @@ namespace OpencodeDpiFix
             for (int i = 1; i < args.Length; i++)
             {
                 string arg = (args[i] ?? string.Empty).ToLowerInvariant();
-                if (arg == "--ipv6" || arg == "-ipv6") blockIpv6 = true;
-                else if ((arg == "--ip" || arg == "-ip") && i + 1 < args.Length) edgeIp = args[++i];
+
+                if (arg == "--ipv6" || arg == "-ipv6")
+                {
+                    blockIpv6 = true;
+                }
+                else if ((arg == "--ip" || arg == "-ip") && i + 1 < args.Length)
+                {
+                    edgeIp = args[++i];
+                }
+                else if ((arg == "--lang" || arg == "-lang") && i + 1 < args.Length)
+                {
+                    Strings.SetLanguage(args[++i]);
+                }
                 else if (arg == "--help" || arg == "-h" || arg == "/?")
                 {
                     Usage();
@@ -27,7 +37,7 @@ namespace OpencodeDpiFix
                 }
                 else
                 {
-                    Console.Error.WriteLine("Неизвестный параметр: " + args[i]);
+                    Console.Error.WriteLine(Strings.UnknownOption(args[i]));
                     Usage();
                     return 2;
                 }
@@ -51,7 +61,7 @@ namespace OpencodeDpiFix
                     {
                         HostsState state = HostsFix.GetState();
                         string expected = state.Applied && state.EdgeIp != null ? state.EdgeIp : edgeIp;
-                        Console.WriteLine("Ожидаемый edge-адрес: " + expected);
+                        Console.WriteLine(Strings.CheckExpected(expected));
                         Console.WriteLine();
                         return NetworkCheck.RunAll(expected, log) ? 0 : 1;
                     }
@@ -61,11 +71,10 @@ namespace OpencodeDpiFix
                         HostsState state = HostsFix.GetState();
                         if (state.Applied)
                         {
-                            Console.WriteLine("включён: " + (state.EdgeIp ?? "?") +
-                                (state.Ipv6Blocked ? " (IPv6 отклоняется)" : string.Empty));
+                            Console.WriteLine(Strings.StatusOnCli(state.EdgeIp ?? "?", state.Ipv6Blocked));
                             return 0;
                         }
-                        Console.WriteLine("выключен");
+                        Console.WriteLine(Strings.StatusOffCli);
                         return 1;
                     }
 
@@ -77,32 +86,22 @@ namespace OpencodeDpiFix
                         return 0;
 
                     default:
-                        Console.Error.WriteLine("Неизвестная команда: " + args[0]);
+                        Console.Error.WriteLine(Strings.UnknownCommand(args[0]));
                         Usage();
                         return 2;
                 }
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine("ОШИБКА: " + ex.Message);
+                Console.Error.WriteLine(Strings.ErrorPrefix(ex.Message));
                 return 1;
             }
         }
 
         private static void Usage()
         {
-            Console.WriteLine("OpencodeDpiFix " + Program.Version + " — обход блокировки opencode.ai через hosts");
-            Console.WriteLine();
-            Console.WriteLine("  OpencodeDpiFix.exe                       открыть окно программы");
-            Console.WriteLine("  OpencodeDpiFix.exe install [--ipv6]      включить обход (нужен администратор)");
-            Console.WriteLine("  OpencodeDpiFix.exe revert                удалить записи (нужен администратор)");
-            Console.WriteLine("  OpencodeDpiFix.exe check                 проверить доступность доменов");
-            Console.WriteLine("  OpencodeDpiFix.exe status                показать состояние записей");
-            Console.WriteLine();
-            Console.WriteLine("Параметры:");
-            Console.WriteLine("  --ip <адрес>   edge-адрес, по умолчанию " + HostsFix.DefaultEdgeIp +
-                              " (резервный " + HostsFix.BackupEdgeIp + ")");
-            Console.WriteLine("  --ipv6         дополнительно отклонять IPv6 для этих доменов");
+            Console.WriteLine(Strings.UsageHeader(Program.Version));
+            Console.Write(Strings.UsageBody);
         }
     }
 }

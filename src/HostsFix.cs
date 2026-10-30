@@ -31,11 +31,6 @@ namespace OpencodeDpiFix
         public const string DefaultEdgeIp = "8.47.69.5";
         public const string BackupEdgeIp = "8.6.112.5";
 
-        public const string BlockComment =
-            "# Правило DPI режет TLS ClientHello с PQ key share; этот edge не затронут.";
-        public const string Ipv6Comment =
-            "# IPv6 принудительно отключён для этих доменов (соединение отклоняется, браузер сразу берёт IPv4).";
-
         public static readonly string[] Domains = { "opencode.ai", "models.dev", "registry.npmjs.org" };
 
         public static string HostsPath
@@ -142,12 +137,12 @@ namespace OpencodeDpiFix
             if (!IPAddress.TryParse((edgeIp ?? string.Empty).Trim(), out address) ||
                 address.AddressFamily != AddressFamily.InterNetwork)
             {
-                throw new ArgumentException("Некорректный IPv4-адрес: «" + edgeIp + "»");
+                throw new ArgumentException(Strings.InvalidIp(edgeIp));
             }
             string ip = address.ToString();
 
             if (!File.Exists(HostsPath))
-                throw new FileNotFoundException("Не найден файл hosts: " + HostsPath);
+                throw new FileNotFoundException(Strings.HostsNotFound(HostsPath));
 
             Encoding encoding;
             string newLine;
@@ -155,16 +150,16 @@ namespace OpencodeDpiFix
 
             int removed;
             List<string> kept = StripBlock(lines, out removed);
-            if (removed > 0) log("Удалён предыдущий блок (" + removed + " строк).");
+            if (removed > 0) log(Strings.PreviousRemoved(removed));
 
             kept.Add(Marker);
-            kept.Add(BlockComment);
+            kept.Add(Strings.HostsBlockComment);
             for (int i = 0; i < Domains.Length; i++)
                 kept.Add(ip + "\t" + Domains[i]);
 
             if (blockIpv6)
             {
-                kept.Add(Ipv6Comment);
+                kept.Add(Strings.HostsIpv6Comment);
                 for (int i = 0; i < Domains.Length; i++)
                     kept.Add("::1\t" + Domains[i]);
             }
@@ -172,8 +167,7 @@ namespace OpencodeDpiFix
 
             WriteWithBackup(kept, encoding, newLine, log);
 
-            log("hosts обновлён: " + ip +
-                (blockIpv6 ? " (+ IPv6 отклоняется)" : string.Empty) + ".");
+            log(Strings.HostsUpdated(ip, blockIpv6));
             FlushDns(log);
             Verify(ip, log);
         }
@@ -183,7 +177,7 @@ namespace OpencodeDpiFix
         public static void Revert(Action<string> log)
         {
             if (!File.Exists(HostsPath))
-                throw new FileNotFoundException("Не найден файл hosts: " + HostsPath);
+                throw new FileNotFoundException(Strings.HostsNotFound(HostsPath));
 
             Encoding encoding;
             string newLine;
@@ -193,29 +187,29 @@ namespace OpencodeDpiFix
             List<string> kept = StripBlock(lines, out removed);
             if (removed == 0)
             {
-                log("Записей этого инструмента в hosts нет — менять нечего.");
+                log(Strings.NothingToRevert);
                 return;
             }
 
             WriteWithBackup(kept, encoding, newLine, log);
-            log("Блок удалён (" + removed + " строк).");
+            log(Strings.BlockRemoved(removed));
             FlushDns(log);
-            log("hosts вернулся к состоянию до установки.");
+            log(Strings.Restored);
         }
 
         // -------------------------------------------------------------- helpers
 
         public static void Verify(string edgeIp, Action<string> log)
         {
-            log("Проверка резолва:");
+            log(Strings.VerifyHeader);
             for (int i = 0; i < Domains.Length; i++)
             {
                 string[] ips = NetworkCheck.ResolveIpv4(Domains[i]);
                 bool ok = Array.IndexOf(ips, edgeIp) >= 0;
                 log(string.Format(CultureInfo.InvariantCulture, "  {0,-20} {1,-16} {2}",
                     Domains[i],
-                    ips.Length > 0 ? string.Join(",", ips) : "нет ответа",
-                    ok ? "OK" : "НЕ ПРИМЕНИЛОСЬ"));
+                    ips.Length > 0 ? string.Join(",", ips) : Strings.NoAnswer,
+                    ok ? Strings.Ok : Strings.NotApplied));
             }
         }
 
@@ -235,11 +229,11 @@ namespace OpencodeDpiFix
                     p.StandardError.ReadToEnd();
                     p.WaitForExit(10000);
                 }
-                log("Кэш DNS сброшен.");
+                log(Strings.DnsFlushed);
             }
             catch (Exception ex)
             {
-                log("Не удалось сбросить кэш DNS: " + ex.Message);
+                log(Strings.DnsFlushFailed(ex.Message));
             }
         }
 
@@ -280,8 +274,7 @@ namespace OpencodeDpiFix
         {
             if (!IsAdmin() && !AdminCheckBypassed)
             {
-                throw new InvalidOperationException(
-                    "Нужны права администратора: запустите программу и подтвердите запрос UAC.");
+                throw new InvalidOperationException(Strings.NoAdmin);
             }
 
             string stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
@@ -294,7 +287,7 @@ namespace OpencodeDpiFix
             }
 
             File.Copy(HostsPath, backup, false);
-            log("Резервная копия: " + backup);
+            log(Strings.Backup(backup));
 
             FileAttributes attributes = File.GetAttributes(HostsPath);
             if ((attributes & FileAttributes.ReadOnly) != 0)

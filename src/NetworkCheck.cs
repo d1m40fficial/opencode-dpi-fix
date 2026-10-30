@@ -90,7 +90,7 @@ namespace OpencodeDpiFix
             bool allOk = true;
 
             log(string.Format(CultureInfo.InvariantCulture, "{0,-22} {1,-24} {2,-8} {3}",
-                "домен", "резолв", "tcp443", "https"));
+                Strings.ColumnDomain, Strings.ColumnResolve, Strings.ColumnTcp, Strings.ColumnHttps));
             log(new string('-', 74));
 
             for (int i = 0; i < HostsFix.Domains.Length; i++)
@@ -98,28 +98,26 @@ namespace OpencodeDpiFix
                 CheckEntry entry = Check(HostsFix.Domains[i], expectedEdgeIp);
                 if (!entry.Ok) allOk = false;
 
-                log(string.Format(CultureInfo.InvariantCulture, "{0,-22} {1,-24} {2,-8} {3} ({4}с)",
+                log(string.Format(CultureInfo.InvariantCulture, "{0,-22} {1,-24} {2,-8} {3} ({4}s)",
                     entry.Domain,
-                    entry.Ipv4.Length > 0 ? string.Join(",", entry.Ipv4) : "нет ответа",
-                    entry.TcpOk ? "OK" : "нет",
+                    entry.Ipv4.Length > 0 ? string.Join(",", entry.Ipv4) : Strings.NoAnswer,
+                    entry.TcpOk ? Strings.TcpYes : Strings.TcpNo,
                     entry.HttpsText,
                     entry.Seconds.ToString("0.0", CultureInfo.InvariantCulture)));
 
                 if (!entry.Ok)
                 {
                     if (!entry.ResolvedToEdge)
-                        log("   -> hosts не направляет домен на " + (expectedEdgeIp ?? "edge-адрес"));
+                        log(Strings.HintResolve(expectedEdgeIp ?? "?"));
                     if (!entry.TcpOk)
-                        log("   -> TCP 443 не открывается");
+                        log(Strings.HintTcp);
                     if (!entry.HttpsOk)
-                        log("   -> HTTPS не отвечает");
+                        log(Strings.HintHttps);
                 }
             }
 
             log(string.Empty);
-            log(allOk
-                ? "Итог: всё работает — opencode.ai, models.dev и npm доступны."
-                : "Итог: есть проблемы. Смотрите пометки выше.");
+            log(allOk ? Strings.SummaryOk : Strings.SummaryFail);
 
             return allOk;
         }
@@ -140,7 +138,7 @@ namespace OpencodeDpiFix
                 {
                     seconds = watch.Elapsed.TotalSeconds;
                     ok = true;
-                    return "HTTP " + (int)response.StatusCode;
+                    return Strings.HttpOk((int)response.StatusCode);
                 }
             }
             catch (WebException ex)
@@ -152,22 +150,22 @@ namespace OpencodeDpiFix
                     int code = (int)response.StatusCode;
                     response.Close();
                     ok = true;
-                    return "HTTP " + code;
+                    return Strings.HttpOk(code);
                 }
                 ok = false;
-                return "ошибка: " + Shorten(ex.Message);
+                return Strings.HttpError(Shorten(ex.Message));
             }
             catch (Exception ex)
             {
                 seconds = watch.Elapsed.TotalSeconds;
                 ok = false;
-                return "ошибка: " + Shorten(ex.Message);
+                return Strings.HttpError(Shorten(ex.Message));
             }
         }
 
         private static string Shorten(string text)
         {
-            if (string.IsNullOrEmpty(text)) return "без описания";
+            if (string.IsNullOrEmpty(text)) return Strings.NoDescription;
             text = text.Replace("\r", " ").Replace("\n", " ").Trim();
             return text.Length > 70 ? text.Substring(0, 70) + "…" : text;
         }
